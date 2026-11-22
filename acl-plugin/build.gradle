@@ -69,6 +69,7 @@ def integrationTest = tasks.register('integrationTest', Test) {
     inputs.file(zipFile).withPathSensitivity(PathSensitivity.NONE)
     jvmArgumentProviders.add({ ["-Dprotomolt.acl.plugin.zip=${zipFile.get().asFile.absolutePath}".toString()] } as CommandLineArgumentProvider)
     systemProperty 'protomolt.test.opensearch.image', "opensearchproject/opensearch:${opensearchVersion}"
+    systemProperty 'protomolt.test.keycloak.image', "quay.io/keycloak/keycloak:${libs.versions.keycloak.image.get()}"
 }
 
 tasks.named('check') {

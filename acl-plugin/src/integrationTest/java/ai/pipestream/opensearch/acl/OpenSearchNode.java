@@ -12,12 +12,14 @@ import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Map;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import org.opensearch.testcontainers.OpenSearchContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.utility.DockerImageName;
 
@@ -46,6 +48,14 @@ final class OpenSearchNode implements AutoCloseable {
      * Builds the image with the plugin zip installed and starts the node.
      */
     static OpenSearchNode start() throws GeneralSecurityException {
+        return start(null, Map.of());
+    }
+
+    /**
+     * Builds the image with the plugin zip installed and starts the node on the given network with extra
+     * environment variables.
+     */
+    static OpenSearchNode start(Network network, Map<String, String> env) throws GeneralSecurityException {
         String baseImage = System.getProperty("protomolt.test.opensearch.image", "opensearchproject/opensearch:3.10.0");
         Path zip = Path.of(System.getProperty("protomolt.acl.plugin.zip"));
         if (!Files.isRegularFile(zip)) {
@@ -63,7 +73,11 @@ final class OpenSearchNode implements AutoCloseable {
         OpenSearchContainer<?> container = new OpenSearchContainer<>(
                 DockerImageName.parse(image).asCompatibleSubstituteFor("opensearchproject/opensearch"))
                 .withSecurityEnabled()
-                .withEnv("OPENSEARCH_INITIAL_ADMIN_PASSWORD", ADMIN_PASSWORD);
+                .withEnv("OPENSEARCH_INITIAL_ADMIN_PASSWORD", ADMIN_PASSWORD)
+                .withEnv(env);
+        if (network != null) {
+            container.withNetwork(network);
+        }
         container.start();
         OpenSearchNode node = new OpenSearchNode(container, insecureClient());
         node.awaitSecurityReady();
@@ -77,8 +91,19 @@ final class OpenSearchNode implements AutoCloseable {
     Response request(String user, String password, String method, String path, String body)
             throws IOException, InterruptedException {
         HttpResponse<String> response = send(user, password, method, path, body);
-        JsonNode json = response.body().isEmpty() ? JSON.createObjectNode() : JSON.readTree(response.body());
-        return new Response(response.statusCode(), json);
+        return new Response(response.statusCode(), parse(response.body()));
+    }
+
+    private static JsonNode parse(String body) {
+        String trimmed = body.strip();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            try {
+                return JSON.readTree(trimmed);
+            } catch (IOException e) {
+                throw new IllegalStateException("unreadable JSON response: " + body, e);
+            }
+        }
+        return JSON.createObjectNode().put("text", body);
     }
 
     JsonNode admin(String method, String path, String body) throws IOException, InterruptedException {
@@ -89,13 +114,24 @@ final class OpenSearchNode implements AutoCloseable {
         return response.body();
     }
 
+    Response requestWithToken(String accessToken, String method, String path, String body)
+            throws IOException, InterruptedException {
+        HttpResponse<String> response = sendWithAuthorization("Bearer " + accessToken, method, path, body);
+        return new Response(response.statusCode(), parse(response.body()));
+    }
+
     private HttpResponse<String> send(String user, String password, String method, String path, String body)
             throws IOException, InterruptedException {
         String credentials = Base64.getEncoder()
                 .encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
+        return sendWithAuthorization("Basic " + credentials, method, path, body);
+    }
+
+    private HttpResponse<String> sendWithAuthorization(String authorization, String method, String path, String body)
+            throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(container.getHttpHostAddress() + path))
                 .timeout(Duration.ofSeconds(60))
-                .header("Authorization", "Basic " + credentials)
+                .header("Authorization", authorization)
                 .header("Content-Type", path.contains("_bulk") || path.contains("_msearch")
                         ? "application/x-ndjson" : "application/json");
         builder.method(method, body == null

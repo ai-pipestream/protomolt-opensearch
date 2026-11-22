@@ -15,7 +15,7 @@ public final class AclDocuments {
 
     /**
      * Returns whether the caller may read the document: the ACL is complete, the allow field holds one of the
-     * caller's principals, and every gate holds one of them.
+     * caller's principals, every gate holds one of them, and the deny field holds none of them.
      *
      * @param fields the ACL field names
      * @param source the document source, or null when it is not available
@@ -30,7 +30,7 @@ public final class AclDocuments {
         if (!Boolean.TRUE.equals(complete) && !"true".equals(complete)) {
             return false;
         }
-        if (!matchesAny(source.get(fields.allow()), principals)) {
+        if (matchesAny(source.get(fields.deny()), principals) || !matchesAny(source.get(fields.allow()), principals)) {
             return false;
         }
         Object gates = source.get(fields.gates());

@@ -17,7 +17,8 @@ public final class AclQueries {
 
     /**
      * Builds the access query: the ACL is complete, the allow field holds one of the caller's principals, and no
-     * gate lacks all of the caller's principals. With no principals it matches nothing.
+     * gate lacks all of the caller's principals, and the deny field holds none of the caller's principals. With no
+     * principals it matches nothing.
      *
      * @param fields the ACL field names
      * @param principals the caller's principal keys
@@ -32,6 +33,7 @@ public final class AclQueries {
         return QueryBuilders.boolQuery()
                 .filter(QueryBuilders.termQuery(fields.complete(), true))
                 .filter(QueryBuilders.termsQuery(fields.allow(), principals))
+                .mustNot(QueryBuilders.termsQuery(fields.deny(), principals))
                 .mustNot(QueryBuilders.nestedQuery(fields.gates(), gateFails, ScoreMode.None).ignoreUnmapped(true));
     }
 

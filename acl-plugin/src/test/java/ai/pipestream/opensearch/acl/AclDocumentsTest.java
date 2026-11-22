@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class AclDocumentsTest {
 
-    private static final AclFields FIELDS = new AclFields("acl_allow", "acl_gates", "allow", "acl_complete");
+    private static final AclFields FIELDS = new AclFields("acl_allow", "acl_deny", "acl_gates", "allow", "acl_complete");
 
     @Test
     void allowsWhenAllowAndEveryGateMatch() {
@@ -43,5 +43,14 @@ class AclDocumentsTest {
         Map<String, Object> source = Map.of("acl_complete", true, "acl_allow", "alice", "acl_gates", List.of("alice"));
 
         assertThat(AclDocuments.allows(FIELDS, source, Set.of("alice"))).isFalse();
+    }
+
+    @Test
+    void denyWinsOverAllow() {
+        Map<String, Object> source = Map.of(
+                "acl_complete", true, "acl_allow", List.of("grp:space"), "acl_deny", List.of("grp:contractors"));
+
+        assertThat(AclDocuments.allows(FIELDS, source, Set.of("alice", "grp:space"))).isTrue();
+        assertThat(AclDocuments.allows(FIELDS, source, Set.of("carl", "grp:space", "grp:contractors"))).isFalse();
     }
 }

@@ -156,7 +156,7 @@ public final class AclDocumentReadFilter implements ActionFilter {
     }
 
     private void readAcls(List<Lookup> lookups, ActionListener<Map<Lookup, Map<String, Object>>> listener) {
-        String[] includes = {fields.allow(), fields.gates(), fields.complete()};
+        String[] includes = {fields.allow(), fields.deny(), fields.gates(), fields.complete()};
         MultiGetRequest lookupRequest = new MultiGetRequest().realtime(true);
         for (Lookup lookup : lookups) {
             lookupRequest.add(new MultiGetRequest.Item(lookup.index(), lookup.id())

@@ -21,6 +21,7 @@ class AclFilterPluginIT {
               "mappings": { "properties": {
                 "title": { "type": "text" },
                 "acl_allow": { "type": "keyword" },
+                "acl_deny": { "type": "keyword" },
                 "acl_complete": { "type": "boolean" },
                 "acl_gates": { "type": "nested", "properties": { "allow": { "type": "keyword" } } }
               } }
@@ -42,6 +43,8 @@ class AclFilterPluginIT {
                 {"title":"budget restricted page","acl_allow":["grp:space"],"acl_complete":true,"acl_gates":[{"allow":["alice","grp:legal"]}]}
                 {"index":{"_index":"acl-docs","_id":"two-gate-page"}}
                 {"title":"budget two gate page","acl_allow":["grp:space"],"acl_complete":true,"acl_gates":[{"allow":["grp:legal"]},{"allow":["bob"]}]}
+                {"index":{"_index":"acl-docs","_id":"denied-to-bob-page"}}
+                {"title":"budget denied page","acl_allow":["grp:space"],"acl_deny":["bob"],"acl_complete":true}
                 {"index":{"_index":"acl-docs","_id":"incomplete-page"}}
                 {"title":"budget incomplete page","acl_allow":["grp:space"],"acl_complete":false}
                 {"index":{"_index":"acl-docs","_id":"other-space-page"}}
@@ -105,7 +108,7 @@ class AclFilterPluginIT {
     @Test
     void userInOneGateSeesSpaceAndRestrictedPage() throws Exception {
         assertThat(searchIds("alice", "/acl-docs/_search", "{\"size\":50}"))
-                .containsExactlyInAnyOrder("space-page", "restricted-page");
+                .containsExactlyInAnyOrder("space-page", "restricted-page", "denied-to-bob-page");
     }
 
     @Test
@@ -152,7 +155,7 @@ class AclFilterPluginIT {
     void countIsFiltered() throws Exception {
         OpenSearchNode.Response response = node.request("alice", PASSWORD, "POST", "/acl-docs/_count", "{}");
         assertThat(response.status()).isEqualTo(200);
-        assertThat(response.body().path("count").asInt()).isEqualTo(2);
+        assertThat(response.body().path("count").asInt()).isEqualTo(3);
     }
 
     @Test
@@ -171,10 +174,10 @@ class AclFilterPluginIT {
                 {"size":0,"aggs":{"allow":{"terms":{"field":"acl_allow"}}}}
                 """);
         assertThat(response.status()).isEqualTo(200);
-        assertThat(response.body().path("hits").path("total").path("value").asInt()).isEqualTo(2);
+        assertThat(response.body().path("hits").path("total").path("value").asInt()).isEqualTo(3);
         JsonNode bucket = response.body().path("aggregations").path("allow").path("buckets").get(0);
         assertThat(bucket.path("key").asText()).isEqualTo("grp:space");
-        assertThat(bucket.path("doc_count").asInt()).isEqualTo(2);
+        assertThat(bucket.path("doc_count").asInt()).isEqualTo(3);
     }
 
     @Test
@@ -292,5 +295,15 @@ class AclFilterPluginIT {
                 "{\"doc\":{\"title\":\"budget\"}}").status()).isEqualTo(400);
         assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_mtermvectors",
                 "{\"ids\":[\"space-page\"]}").status()).isEqualTo(400);
+    }
+
+    @Test
+    void denyWinsOverAllowInSearchAndGet() throws Exception {
+        assertThat(searchIds("bob", "/acl-docs/_search", "{\"query\":{\"match\":{\"title\":\"denied\"}}}"))
+                .isEmpty();
+        assertThat(node.request("bob", PASSWORD, "GET", "/acl-docs/_doc/denied-to-bob-page", null).status())
+                .isEqualTo(404);
+        assertThat(node.request("alice", PASSWORD, "GET", "/acl-docs/_doc/denied-to-bob-page", null).status())
+                .isEqualTo(200);
     }
 }

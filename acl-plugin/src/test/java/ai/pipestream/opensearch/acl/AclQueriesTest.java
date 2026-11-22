@@ -15,10 +15,10 @@ import org.opensearch.index.query.TermsQueryBuilder;
 
 class AclQueriesTest {
 
-    private static final AclFields FIELDS = new AclFields("acl_allow", "acl_gates", "allow", "acl_complete");
+    private static final AclFields FIELDS = new AclFields("acl_allow", "acl_deny", "acl_gates", "allow", "acl_complete");
 
     @Test
-    void accessRequiresCompleteAllowAndNoFailingGate() {
+    void accessRequiresCompleteAllowNoDenyAndNoFailingGate() {
         BoolQueryBuilder access = (BoolQueryBuilder) AclQueries.access(FIELDS, List.of("alice", "grp:legal"));
 
         assertThat(access.filter()).hasSize(2);
@@ -29,7 +29,11 @@ class AclQueriesTest {
         assertThat(allow.fieldName()).isEqualTo("acl_allow");
         assertThat(allow.values()).containsExactly("alice", "grp:legal");
 
-        NestedQueryBuilder gates = (NestedQueryBuilder) access.mustNot().get(0);
+        TermsQueryBuilder deny = (TermsQueryBuilder) access.mustNot().get(0);
+        assertThat(deny.fieldName()).isEqualTo("acl_deny");
+        assertThat(deny.values()).containsExactly("alice", "grp:legal");
+
+        NestedQueryBuilder gates = (NestedQueryBuilder) access.mustNot().get(1);
         assertThat(gates.path()).isEqualTo("acl_gates");
         BoolQueryBuilder gateFails = (BoolQueryBuilder) gates.query();
         TermsQueryBuilder gateAllow = (TermsQueryBuilder) gateFails.mustNot().get(0);
