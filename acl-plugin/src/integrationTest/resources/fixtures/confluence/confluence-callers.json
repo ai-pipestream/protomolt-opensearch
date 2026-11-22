@@ -1,0 +1,6 @@
+[
+{"caller":"email:user-1@example.invalid","terms":["atlassian-group:7c989546-0d14-4a91-99ec-a0afdaaedc22","email:user-1@example.invalid","atlassian-account:account-1","public:public"],"reads":{"page:28409901/access":true,"page:29851840/access":true,"page:30048452/access":true,"page:7798963/access":true,"page:7864321/access":true}},
+{"caller":"atlassian-account:account-2","terms":["atlassian-account:account-2","public:public"],"reads":{"page:28409901/access":true,"page:29851840/access":false,"page:30048452/access":false,"page:7798963/access":true,"page:7864321/access":true}},
+{"caller":"atlassian-account:account-4","terms":["atlassian-group:7c989546-0d14-4a91-99ec-a0afdaaedc22","atlassian-account:account-4","public:public"],"reads":{"page:28409901/access":false,"page:29851840/access":false,"page:30048452/access":false,"page:7798963/access":false,"page:7864321/access":false}},
+{"caller":"atlassian-account:account-4 licensed","terms":["atlassian-account:account-4","atlassian-group:7c989546-0d14-4a91-99ec-a0afdaaedc22","atlassian-access-class:all_licensed_users","public:public"],"reads":{"page:28409901/access":true,"page:29851840/access":true,"page:30048452/access":true,"page:7798963/access":true,"page:7864321/access":true}}
+]

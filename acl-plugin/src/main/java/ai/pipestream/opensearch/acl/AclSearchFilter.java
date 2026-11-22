@@ -2,7 +2,6 @@ package ai.pipestream.opensearch.acl;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 
 import org.opensearch.OpenSearchStatusException;
@@ -16,7 +15,6 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.OptionallyResolvedIndices;
 import org.opensearch.cluster.metadata.ResolvedIndices;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.rest.RestStatus;
@@ -35,19 +33,19 @@ public final class AclSearchFilter implements ActionFilter {
     public static final int ORDER = 1000;
 
     private final Supplier<ClusterState> clusterState;
-    private final Supplier<ThreadContext> threadContext;
+    private final CallerPrincipalResolver principals;
     private final AclFields fields;
 
     /**
      * Creates the filter.
      *
      * @param clusterState supplies the current cluster state
-     * @param threadContext supplies the node's thread context
+     * @param principals resolves the caller's principal keys
      * @param fields the ACL field names
      */
-    public AclSearchFilter(Supplier<ClusterState> clusterState, Supplier<ThreadContext> threadContext, AclFields fields) {
+    public AclSearchFilter(Supplier<ClusterState> clusterState, CallerPrincipalResolver principals, AclFields fields) {
         this.clusterState = clusterState;
-        this.threadContext = threadContext;
+        this.principals = principals;
         this.fields = fields;
     }
 
@@ -79,14 +77,14 @@ public final class AclSearchFilter implements ActionFilter {
             listener.onFailure(new OpenSearchStatusException(rejection, RestStatus.BAD_REQUEST));
             return;
         }
-        Set<String> principals = CallerPrincipals.fromSecurityUserInfo(
-                threadContext.get().getTransient(CallerPrincipals.SECURITY_USER_INFO_TRANSIENT));
-        QueryBuilder access = scope.protectedIndices() == null
-                ? AclQueries.access(fields, principals)
-                : AclQueries.accessForIndices(fields, principals, scope.protectedIndices());
-        source.query(AclQueries.restrict(source.query(), access));
-        searchRequest.source(source);
-        chain.proceed(task, action, request, listener);
+        principals.resolve(ActionListener.wrap(keys -> {
+            QueryBuilder access = scope.protectedIndices() == null
+                    ? AclQueries.access(fields, keys)
+                    : AclQueries.accessForIndices(fields, keys, scope.protectedIndices());
+            source.query(AclQueries.restrict(source.query(), access));
+            searchRequest.source(source);
+            chain.proceed(task, action, request, listener);
+        }, listener::onFailure));
     }
 
     private Scope scope(OptionallyResolvedIndices resolved) {

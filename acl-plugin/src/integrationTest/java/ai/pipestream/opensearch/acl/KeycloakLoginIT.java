@@ -88,7 +88,7 @@ class KeycloakLoginIT {
                  "index_permissions":[{"index_patterns":["acl-docs"],"allowed_actions":["read"]}]}
                 """);
         node.admin("PUT", "/_plugins/_security/api/rolesmapping/acl_reader", """
-                {"users":["erin","frank"]}
+                {"users":["erin","frank","gina"]}
                 """);
     }
 
@@ -181,5 +181,15 @@ class KeycloakLoginIT {
     void invalidTokenIsRefused() throws Exception {
         OpenSearchNode.Response response = node.requestWithToken("not-a-token", "POST", "/acl-docs/_search", "{}");
         assertThat(response.status()).isEqualTo(401);
+    }
+
+    @Test
+    void storedPrincipalsAddGroupsTheTokenDoesNotCarry() throws Exception {
+        String token = login("gina", "Gina-Kc-Test!1");
+        assertThat(searchIds(token)).isEmpty();
+
+        node.admin("PUT", "/_plugins/protomolt_acl/principals/gina", "{\"keys\":[\"grp:space\",\"grp:legal\"]}");
+
+        assertThat(searchIds(token)).containsExactlyInAnyOrder("space-page", "legal-page");
     }
 }

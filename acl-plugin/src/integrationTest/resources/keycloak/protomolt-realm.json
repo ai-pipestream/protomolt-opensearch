@@ -50,6 +50,16 @@
       "lastName": "Test",
       "credentials": [ { "type": "password", "value": "Frank-Kc-Test!1", "temporary": false } ],
       "groups": [ "grp:other" ]
+    },
+    {
+      "username": "gina",
+      "enabled": true,
+      "email": "gina@example.com",
+      "emailVerified": true,
+      "firstName": "Gina",
+      "lastName": "Test",
+      "credentials": [ { "type": "password", "value": "Gina-Kc-Test!1", "temporary": false } ],
+      "groups": [ ]
     }
   ]
 }

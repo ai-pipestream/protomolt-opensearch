@@ -193,6 +193,10 @@ final class OpenSearchNode implements AutoCloseable {
                 .build();
     }
 
+    String logs() {
+        return container.getLogs();
+    }
+
     @Override
     public void close() {
         container.stop();

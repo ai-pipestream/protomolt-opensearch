@@ -19,7 +19,7 @@ public final class AclDocuments {
      *
      * @param fields the ACL field names
      * @param source the document source, or null when it is not available
-     * @param principals the caller's principal keys
+     * @param principals the caller's principal keys, lower-cased
      * @return true when the caller may read the document
      */
     public static boolean allows(AclFields fields, Map<String, Object> source, Set<String> principals) {
@@ -50,7 +50,7 @@ public final class AclDocuments {
             return false;
         }
         for (Object value : asCollection(values)) {
-            if (value instanceof String key && principals.contains(key)) {
+            if (value instanceof String key && principals.contains(CallerPrincipalResolver.normalize(key))) {
                 return true;
             }
         }

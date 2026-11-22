@@ -61,8 +61,9 @@ class AclFilterPluginIT {
         createUser("bob", "\"grp:space\",\"grp:legal\"");
         createUser("carol", "\"grp:other\"");
         createUser("dave", "");
+        createUser("eve", "");
         node.admin("PUT", "/_plugins/_security/api/rolesmapping/acl_reader", """
-                {"users":["alice","bob","carol","dave"]}
+                {"users":["alice","bob","carol","dave","eve"]}
                 """);
     }
 
@@ -306,4 +307,37 @@ class AclFilterPluginIT {
         assertThat(node.request("alice", PASSWORD, "GET", "/acl-docs/_doc/denied-to-bob-page", null).status())
                 .isEqualTo(200);
     }
+
+    @Test
+    void storedPrincipalsExtendTheLoginAndAreCaseInsensitive() throws Exception {
+        assertThat(searchIds("eve", "/acl-docs/_search", "{\"size\":50}")).isEmpty();
+
+        node.admin("PUT", "/_plugins/protomolt_acl/principals/eve", "{\"keys\":[\"GRP:Space\",\"grp:LEGAL\"]}");
+
+        assertThat(searchIds("eve", "/acl-docs/_search", "{\"size\":50}"))
+                .containsExactlyInAnyOrder("space-page", "restricted-page", "denied-to-bob-page");
+        assertThat(node.request("eve", PASSWORD, "GET", "/acl-docs/_doc/restricted-page", null).status())
+                .isEqualTo(200);
+
+        node.admin("PUT", "/_plugins/protomolt_acl/principals/eve", "{\"keys\":[]}");
+        assertThat(searchIds("eve", "/acl-docs/_search", "{\"size\":50}")).isEmpty();
+    }
+
+    @Test
+    void onlyAdminsCanStorePrincipals() throws Exception {
+        OpenSearchNode.Response response = node.request("carol", PASSWORD, "PUT",
+                "/_plugins/protomolt_acl/principals/carol", "{\"keys\":[\"grp:space\"]}");
+        assertThat(response.status()).isEqualTo(403);
+    }
+
+    @Test
+    void callersCannotReadThePrincipalStore() throws Exception {
+        node.admin("PUT", "/_plugins/protomolt_acl/principals/someone", "{\"keys\":[\"grp:secret\"]}");
+        OpenSearchNode.Response get = node.request("alice", PASSWORD, "GET", "/.protomolt-acl-principals/_doc/someone", null);
+        assertThat(get.status()).isIn(403, 404);
+        assertThat(get.body().toString()).doesNotContain("grp:secret");
+        OpenSearchNode.Response search = node.request("alice", PASSWORD, "POST", "/.protomolt-acl-principals/_search", "{}");
+        assertThat(search.body().toString()).doesNotContain("grp:secret");
+    }
 }
+

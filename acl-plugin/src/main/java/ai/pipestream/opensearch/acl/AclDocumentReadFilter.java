@@ -53,6 +53,7 @@ public final class AclDocumentReadFilter implements ActionFilter {
     private final Supplier<ClusterState> clusterState;
     private final Supplier<ThreadContext> threadContext;
     private final Supplier<Client> client;
+    private final CallerPrincipalResolver principals;
     private final AclFields fields;
 
     /**
@@ -61,16 +62,19 @@ public final class AclDocumentReadFilter implements ActionFilter {
      * @param clusterState supplies the current cluster state
      * @param threadContext supplies the node's thread context
      * @param client supplies the node client used to read ACL fields
+     * @param principals resolves the caller's principal keys
      * @param fields the ACL field names
      */
     public AclDocumentReadFilter(
             Supplier<ClusterState> clusterState,
             Supplier<ThreadContext> threadContext,
             Supplier<Client> client,
+            CallerPrincipalResolver principals,
             AclFields fields) {
         this.clusterState = clusterState;
         this.threadContext = threadContext;
         this.client = client;
+        this.principals = principals;
         this.fields = fields;
     }
 
@@ -142,11 +146,9 @@ public final class AclDocumentReadFilter implements ActionFilter {
             listener.onResponse(response);
             return;
         }
-        Set<String> principals = CallerPrincipals.fromSecurityUserInfo(
-                threadContext.get().getTransient(CallerPrincipals.SECURITY_USER_INFO_TRANSIENT));
-        readAcls(lookups, ActionListener.wrap(
-                acls -> listener.onResponse(redact(response, acls, principals)),
-                listener::onFailure));
+        principals.resolve(ActionListener.wrap(keys -> readAcls(lookups, ActionListener.wrap(
+                acls -> listener.onResponse(redact(response, acls, keys)),
+                listener::onFailure)), listener::onFailure));
     }
 
     private void addIfProtected(List<Lookup> lookups, boolean exists, String index, String id, String routing) {

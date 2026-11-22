@@ -26,8 +26,23 @@ afterwards. Documents carry:
 Field names can be changed with the node settings `protomolt.acl.allow_field`, `protomolt.acl.deny_field`, `protomolt.acl.gates_field`,
 `protomolt.acl.gate_allow_field` and `protomolt.acl.complete_field`.
 
-The caller's principal keys are the user name and each backend role, exactly as the Security plugin reports them. A
-caller with no authenticated user matches nothing.
+The caller's principal keys are the user name and each backend role the Security plugin reports, plus the keys stored
+for that user name in the plugin's principal store. All keys are lower-cased before matching, so index the ACL values
+lower-cased. A caller with no authenticated user matches nothing.
+
+### Principal store
+
+Keys a caller holds beyond its login (expanded groups, linked accounts, access classes) are kept in the system index
+`.protomolt-acl-principals`, one document per Security plugin user name. Only the plugin reads it; callers cannot.
+Replace a user's keys with:
+
+```
+PUT /_plugins/protomolt_acl/principals/{user}
+{"keys": ["atlassian-account:...", "atlassian-group:...", "public:public"]}
+```
+
+This needs the cluster permission `cluster:admin/protomolt/acl/principals/put`. Each protected read does one realtime
+get on the store.
 
 ### Searches
 
@@ -53,7 +68,12 @@ Builds the plugin zip into `acl-plugin/build/distributions/`, runs the unit test
   plugin on and reads as several internal users.
 - `KeycloakLoginIT` adds an OpenID Connect auth domain backed by a Keycloak container
   (`quay.io/keycloak/keycloak:26.8.2`), logs users in through Keycloak and checks that the user name and `groups`
-  claim from the access token drive the filter. Docker is required. Any compiler, javadoc or Gradle deprecation
+  claim from the access token drive the filter, and that stored keys add groups the token does not carry.
+- `RealConfluenceAclIT` indexes protomolt's document security for real Confluence pages (fixture in
+  `src/integrationTest/resources/fixtures/confluence/`) and checks that the plugin's search and get, and the Security
+  plugin's document-level security, give exactly protomolt's own read decision for every caller and page.
+- `DlsComparisonIT` runs the same documents through the plugin and through built-in document-level security (a terms
+  lookup into a principals index) and records where they differ. Docker is required. Any compiler, javadoc or Gradle deprecation
 warning fails the build.
 
 Install on a node:
