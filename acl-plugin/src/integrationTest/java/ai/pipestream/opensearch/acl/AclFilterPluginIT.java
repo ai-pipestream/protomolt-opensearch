@@ -199,4 +199,98 @@ class AclFilterPluginIT {
                 "PUT", "/acl-docs/_settings", "{\"index.protomolt.acl.enabled\":false}");
         assertThat(response.status()).isEqualTo(400);
     }
+
+    @Test
+    void getHidesDocumentsTheCallerCannotRead() throws Exception {
+        OpenSearchNode.Response allowed = node.request("alice", PASSWORD, "GET", "/acl-docs/_doc/restricted-page", null);
+        assertThat(allowed.status()).isEqualTo(200);
+        assertThat(allowed.body().path("found").asBoolean()).isTrue();
+        assertThat(allowed.body().path("_source").path("title").asText()).isEqualTo("budget restricted page");
+
+        OpenSearchNode.Response hidden = node.request("carol", PASSWORD, "GET", "/acl-docs/_doc/restricted-page", null);
+        assertThat(hidden.status()).isEqualTo(404);
+        assertThat(hidden.body().path("found").asBoolean()).isFalse();
+        assertThat(hidden.body().has("_source")).isFalse();
+
+        OpenSearchNode.Response incomplete =
+                node.request("alice", PASSWORD, "GET", "/acl-docs/_doc/incomplete-page", null);
+        assertThat(incomplete.status()).isEqualTo(404);
+    }
+
+    @Test
+    void getWithSourceFilteringStillChecksTheAcl() throws Exception {
+        OpenSearchNode.Response hidden = node.request("alice", PASSWORD, "GET",
+                "/acl-docs/_doc/two-gate-page?_source_includes=title", null);
+        assertThat(hidden.status()).isEqualTo(404);
+
+        OpenSearchNode.Response allowed = node.request("bob", PASSWORD, "GET",
+                "/acl-docs/_doc/two-gate-page?_source_includes=title", null);
+        assertThat(allowed.status()).isEqualTo(200);
+        assertThat(allowed.body().path("_source").has("acl_allow")).isFalse();
+    }
+
+    @Test
+    void getOnUnprotectedIndexIsUnfiltered() throws Exception {
+        OpenSearchNode.Response response = node.request("dave", PASSWORD, "GET", "/open-docs/_doc/open-page", null);
+        assertThat(response.status()).isEqualTo(200);
+    }
+
+    @Test
+    void multiGetHidesDocumentsTheCallerCannotRead() throws Exception {
+        OpenSearchNode.Response response = node.request("alice", PASSWORD, "POST", "/_mget", """
+                {"docs":[
+                  {"_index":"acl-docs","_id":"space-page"},
+                  {"_index":"acl-docs","_id":"two-gate-page"},
+                  {"_index":"acl-docs","_id":"other-space-page"},
+                  {"_index":"open-docs","_id":"open-page"},
+                  {"_index":"acl-docs","_id":"missing-page"}
+                ]}
+                """);
+        assertThat(response.status()).isEqualTo(200);
+        List<Boolean> found = new ArrayList<>();
+        for (JsonNode doc : response.body().path("docs")) {
+            found.add(doc.path("found").asBoolean());
+            if (!doc.path("found").asBoolean()) {
+                assertThat(doc.has("_source")).isFalse();
+            }
+        }
+        assertThat(found).containsExactly(true, false, false, true, false);
+    }
+
+    @Test
+    void explainHidesDocumentsTheCallerCannotRead() throws Exception {
+        String body = "{\"query\":{\"match\":{\"title\":\"budget\"}}}";
+        OpenSearchNode.Response allowed =
+                node.request("alice", PASSWORD, "POST", "/acl-docs/_explain/restricted-page", body);
+        assertThat(allowed.status()).isEqualTo(200);
+        assertThat(allowed.body().path("matched").asBoolean()).isTrue();
+
+        OpenSearchNode.Response hidden =
+                node.request("carol", PASSWORD, "POST", "/acl-docs/_explain/restricted-page", body);
+        assertThat(hidden.status()).isEqualTo(404);
+        assertThat(hidden.body().has("explanation")).isFalse();
+    }
+
+    @Test
+    void termVectorsHideDocumentsTheCallerCannotRead() throws Exception {
+        OpenSearchNode.Response allowed = node.request("alice", PASSWORD, "POST",
+                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"]}");
+        assertThat(allowed.status()).isEqualTo(200);
+        assertThat(allowed.body().path("found").asBoolean()).isTrue();
+
+        OpenSearchNode.Response hidden = node.request("carol", PASSWORD, "POST",
+                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"]}");
+        assertThat(hidden.body().path("found").asBoolean()).isFalse();
+        assertThat(hidden.body().has("term_vectors")).isFalse();
+    }
+
+    @Test
+    void termStatisticsAndArtificialDocumentsAreRejected() throws Exception {
+        assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_termvectors/space-page",
+                "{\"fields\":[\"title\"],\"term_statistics\":true}").status()).isEqualTo(400);
+        assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_termvectors",
+                "{\"doc\":{\"title\":\"budget\"}}").status()).isEqualTo(400);
+        assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_mtermvectors",
+                "{\"ids\":[\"space-page\"]}").status()).isEqualTo(400);
+    }
 }

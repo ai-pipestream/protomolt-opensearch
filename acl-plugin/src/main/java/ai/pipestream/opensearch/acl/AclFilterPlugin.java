@@ -23,12 +23,13 @@ import org.opensearch.transport.client.Client;
 import org.opensearch.watcher.ResourceWatcherService;
 
 /**
- * Registers the ACL settings and the search filter.
+ * Registers the ACL settings, the search filter and the document read filter.
  */
 public class AclFilterPlugin extends Plugin implements ActionPlugin {
 
     private final SetOnce<ClusterService> clusterService = new SetOnce<>();
     private final SetOnce<ThreadPool> threadPool = new SetOnce<>();
+    private final SetOnce<Client> client = new SetOnce<>();
     private final AclFields fields;
 
     /**
@@ -60,14 +61,21 @@ public class AclFilterPlugin extends Plugin implements ActionPlugin {
             Supplier<RepositoriesService> repositoriesServiceSupplier) {
         this.clusterService.set(clusterService);
         this.threadPool.set(threadPool);
+        this.client.set(client);
         return List.of();
     }
 
     @Override
     public List<ActionFilter> getActionFilters() {
-        return List.of(new AclSearchFilter(
-                () -> clusterService.get().state(),
-                () -> threadPool.get().getThreadContext(),
-                fields));
+        return List.of(
+                new AclSearchFilter(
+                        () -> clusterService.get().state(),
+                        () -> threadPool.get().getThreadContext(),
+                        fields),
+                new AclDocumentReadFilter(
+                        () -> clusterService.get().state(),
+                        () -> threadPool.get().getThreadContext(),
+                        client::get,
+                        fields));
     }
 }
