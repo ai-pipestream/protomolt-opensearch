@@ -1,0 +1,3 @@
+rootProject.name = 'protomolt-opensearch'
+
+include 'acl-plugin'
