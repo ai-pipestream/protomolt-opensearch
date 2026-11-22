@@ -69,9 +69,9 @@ Builds the plugin zip into `acl-plugin/build/distributions/`, runs the unit test
 - `KeycloakLoginIT` adds an OpenID Connect auth domain backed by a Keycloak container
   (`quay.io/keycloak/keycloak:26.8.2`), logs users in through Keycloak and checks that the user name and `groups`
   claim from the access token drive the filter, and that stored keys add groups the token does not carry.
-- `RealConfluenceAclIT` indexes protomolt's document security for real Confluence pages (fixture in
-  `src/integrationTest/resources/fixtures/confluence/`) and checks that the plugin's search and get, and the Security
-  plugin's document-level security, give exactly protomolt's own read decision for every caller and page.
+- `RealConfluenceAclIT` and `RealSharePointAclIT` index protomolt's document security for real Confluence pages and
+  SharePoint drives, lists and items (fixtures in `src/integrationTest/resources/fixtures/`) and check that the plugin's search and get, and the Security
+  plugin's document-level security, give exactly protomolt's own read decision for every caller and item.
 - `DlsComparisonIT` runs the same documents through the plugin and through built-in document-level security (a terms
   lookup into a principals index) and records where they differ. Docker is required. Any compiler, javadoc or Gradle deprecation
 warning fails the build.

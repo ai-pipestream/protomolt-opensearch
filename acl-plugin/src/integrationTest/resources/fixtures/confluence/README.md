@@ -1,6 +1,6 @@
 # Confluence ACL fixture
 
-Made by protomolt's `ConfluenceSecurityMappingTest` (branch `claude/project-thread-wfp1ob`, commit a86b781) from
+Made by protomolt's `ConfluenceSecurityMappingTest` (branch `claude/project-thread-wfp1ob`, regenerated 2026-11-22 21:23 UTC) from
 grpc-confluence Sync records recorded live on the CLAUDEGRPC test space, with account ids and emails scrubbed.
 
 - `confluence-items.ndjson`: one line per page, protomolt `DocumentSecurity` projected into the plugin's ACL fields
