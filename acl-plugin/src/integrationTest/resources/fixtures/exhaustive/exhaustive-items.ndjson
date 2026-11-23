@@ -1,0 +1,5 @@
+{"_id":"exhaustive:gated","acl_allow":["atlassian-group:g-staff"],"acl_deny":["atlassian-account:acc-banned","atlassian-account:acc-x"],"acl_gates":[{"source":"confluence-owner:200","allow":["atlassian-account:acc-1","atlassian-group:g-hr"]}],"acl_complete":true}
+{"_id":"exhaustive:ungated","acl_allow":["atlassian-group:g-staff"],"acl_deny":["atlassian-account:acc-banned"],"acl_gates":[],"acl_complete":true}
+{"_id":"exhaustive:write-only","acl_allow":[],"acl_deny":[],"acl_gates":[],"acl_complete":true}
+{"_id":"exhaustive:gate-only","acl_allow":[],"acl_deny":["atlassian-account:acc-x"],"acl_gates":[{"source":"confluence-owner:200","allow":["atlassian-account:acc-1","atlassian-group:g-hr"]}],"acl_complete":true}
+{"_id":"exhaustive:no-rules","acl_allow":[],"acl_deny":[],"acl_gates":[],"acl_complete":true}

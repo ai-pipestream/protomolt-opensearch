@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Build, unit tests and the OpenSearch container test
+        run: ./gradlew build
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: plugin-and-reports
+          path: |
+            acl-plugin/build/distributions/*.zip
+            acl-plugin/build/reports/tests/
+            acl-plugin/build/reports/acl-scale/

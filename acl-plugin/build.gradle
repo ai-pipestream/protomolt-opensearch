@@ -1,0 +1,77 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'OpenSearch plugin that filters searches by document ACL fields and the caller\'s principals'
+
+def opensearchVersion = libs.versions.opensearch.server.get()
+
+sourceSets {
+    integrationTest {
+        java.srcDir 'src/integrationTest/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+    compileOnly libs.opensearch.server
+
+    testImplementation libs.opensearch.server
+    testImplementation platform(libs.junit.bom)
+    testImplementation libs.junit.jupiter
+    testImplementation libs.assertj.core
+    testRuntimeOnly libs.junit.platform.launcher
+
+    integrationTestImplementation libs.opensearch.testcontainers
+    integrationTestImplementation libs.testcontainers
+    integrationTestImplementation libs.jackson.databind
+    integrationTestRuntimeOnly libs.slf4j.simple
+}
+
+def generateDescriptor = tasks.register('generatePluginDescriptor', WriteProperties) {
+    destinationFile = layout.buildDirectory.file('plugin-descriptor/plugin-descriptor.properties')
+    property 'name', 'protomolt-acl'
+    property 'description', project.description
+    property 'version', project.version.toString()
+    property 'classname', 'ai.pipestream.opensearch.acl.AclFilterPlugin'
+    property 'java.version', '21'
+    property 'opensearch.version', opensearchVersion
+}
+
+def pluginZip = tasks.register('pluginZip', Zip) {
+    group = 'build'
+    description = 'Assembles the plugin zip that opensearch-plugin install accepts.'
+    archiveBaseName = 'protomolt-acl'
+    archiveVersion = "${project.version}-os${opensearchVersion}"
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    from tasks.named('jar')
+    from generateDescriptor
+}
+
+tasks.named('assemble') {
+    dependsOn pluginZip
+}
+
+def integrationTest = tasks.register('integrationTest', Test) {
+    description = 'Runs the plugin inside a real OpenSearch node in a container.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter tasks.named('test')
+    dependsOn pluginZip
+    def zipFile = pluginZip.flatMap { it.archiveFile }
+    inputs.file(zipFile).withPathSensitivity(PathSensitivity.NONE)
+    jvmArgumentProviders.add({ ["-Dprotomolt.acl.plugin.zip=${zipFile.get().asFile.absolutePath}".toString()] } as CommandLineArgumentProvider)
+    systemProperty 'protomolt.test.opensearch.image', "opensearchproject/opensearch:${opensearchVersion}"
+    systemProperty 'protomolt.test.keycloak.image', "quay.io/keycloak/keycloak:${libs.versions.keycloak.image.get()}"
+}
+
+tasks.named('check') {
+    dependsOn integrationTest
+}
