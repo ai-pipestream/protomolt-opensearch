@@ -1,7 +1,7 @@
 # SharePoint ACL fixture
 
-Made by protomolt's `SharePointSecurityMappingTest` (commit 390c1b4) from grpc-microsoft Sync records with
-`include_security`, recorded live on the WelcomeToPipestream test site (run 45073949282), with tenant, site and
+Made by protomolt's `SharePointSecurityMappingTest` (commit 219d5ca) from grpc-microsoft Sync records with
+`include_security`, recorded live on the WelcomeToPipestream test site (run 45100103838), with tenant, site and
 account identifiers scrubbed.
 
 - `sharepoint-items.ndjson`: one line per drive, list or item, protomolt `DocumentSecurity` projected into the
