@@ -10,8 +10,6 @@ import java.util.function.Supplier;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.explain.ExplainAction;
-import org.opensearch.action.explain.ExplainRequest;
-import org.opensearch.action.explain.ExplainResponse;
 import org.opensearch.action.get.GetAction;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -42,8 +40,9 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.client.Client;
 
 /**
- * Hides documents of ACL protected indices from get, multi get, explain and term vectors when the caller's
- * principals do not pass the document's ACL. A hidden document is answered as not found.
+ * Hides documents of ACL protected indices from get, multi get and term vectors when the caller's principals do not
+ * pass the document's ACL. A hidden document is answered as not found. Explain, multi term vectors, artificial
+ * documents and term or field statistics are refused on protected indices.
  */
 public final class AclDocumentReadFilter implements ActionFilter {
 
@@ -106,8 +105,14 @@ public final class AclDocumentReadFilter implements ActionFilter {
             listener.onFailure(badRequest("multi term vectors is not supported on ACL protected indices"));
             return;
         }
-        if (request instanceof TermVectorsRequest termVectors && (termVectors.doc() != null || termVectors.termStatistics())) {
-            listener.onFailure(badRequest("artificial documents and term statistics are not supported on ACL protected indices"));
+        if (ExplainAction.NAME.equals(action)) {
+            listener.onFailure(badRequest("explain is not supported on ACL protected indices"));
+            return;
+        }
+        if (request instanceof TermVectorsRequest termVectors
+                && (termVectors.doc() != null || termVectors.termStatistics() || termVectors.fieldStatistics())) {
+            listener.onFailure(badRequest("artificial documents and term or field statistics are not supported on ACL "
+                    + "protected indices; set field_statistics to false"));
             return;
         }
         chain.proceed(task, action, request, new ActionListener<Response>() {
@@ -128,8 +133,6 @@ public final class AclDocumentReadFilter implements ActionFilter {
         List<Lookup> lookups = new ArrayList<>();
         if (response instanceof GetResponse get && request instanceof GetRequest getRequest) {
             addIfProtected(lookups, get.isExists(), get.getIndex(), get.getId(), getRequest.routing());
-        } else if (response instanceof ExplainResponse explain && request instanceof ExplainRequest explainRequest) {
-            addIfProtected(lookups, explain.isExists(), explain.getIndex(), explain.getId(), explainRequest.routing());
         } else if (response instanceof TermVectorsResponse tv && request instanceof TermVectorsRequest tvRequest) {
             addIfProtected(lookups, tv.isExists(), tv.getIndex(), tv.getId(), tvRequest.routing());
         } else if (response instanceof MultiGetResponse multiGet && request instanceof MultiGetRequest multiGetRequest) {
@@ -192,11 +195,6 @@ public final class AclDocumentReadFilter implements ActionFilter {
             Response response, Map<Lookup, Map<String, Object>> acls, Set<String> principals) {
         if (response instanceof GetResponse get) {
             return denied(acls, principals, get.getIndex(), get.getId()) ? cast(notFound(get.getIndex(), get.getId())) : response;
-        }
-        if (response instanceof ExplainResponse explain) {
-            return denied(acls, principals, explain.getIndex(), explain.getId())
-                    ? cast(new ExplainResponse(explain.getIndex(), explain.getId(), false))
-                    : response;
         }
         if (response instanceof TermVectorsResponse tv) {
             if (denied(acls, principals, tv.getIndex(), tv.getId())) {

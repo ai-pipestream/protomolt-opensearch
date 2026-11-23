@@ -5,6 +5,7 @@ import java.util.List;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 
 /**
  * Settings read by the ACL filter plugin.
@@ -35,6 +36,14 @@ public final class AclSettings {
     public static final Setting<String> COMPLETE_FIELD =
             Setting.simpleString("protomolt.acl.complete_field", "acl_complete", Property.NodeScope);
 
+    /** How long a node keeps a caller's stored keys before reading them again; zero reads them on every request. */
+    public static final Setting<TimeValue> PRINCIPALS_CACHE_TTL = Setting.timeSetting(
+            "protomolt.acl.principals.cache_ttl", TimeValue.timeValueSeconds(30), TimeValue.ZERO, Property.NodeScope);
+
+    /** How many callers' stored keys a node keeps at most. */
+    public static final Setting<Long> PRINCIPALS_CACHE_MAX_ENTRIES = Setting.longSetting(
+            "protomolt.acl.principals.cache_max_entries", 100_000L, 0L, Property.NodeScope);
+
     private AclSettings() {
     }
 
@@ -44,7 +53,8 @@ public final class AclSettings {
      * @return the settings
      */
     public static List<Setting<?>> all() {
-        return List.of(INDEX_ACL_ENABLED, ALLOW_FIELD, DENY_FIELD, GATES_FIELD, GATE_ALLOW_FIELD, COMPLETE_FIELD);
+        return List.of(INDEX_ACL_ENABLED, ALLOW_FIELD, DENY_FIELD, GATES_FIELD, GATE_ALLOW_FIELD, COMPLETE_FIELD,
+                PRINCIPALS_CACHE_TTL, PRINCIPALS_CACHE_MAX_ENTRIES);
     }
 
     /**

@@ -262,38 +262,41 @@ class AclFilterPluginIT {
     }
 
     @Test
-    void explainHidesDocumentsTheCallerCannotRead() throws Exception {
+    void explainIsRejectedBecauseItShowsIndexWideTermStatistics() throws Exception {
         String body = "{\"query\":{\"match\":{\"title\":\"budget\"}}}";
-        OpenSearchNode.Response allowed =
-                node.request("alice", PASSWORD, "POST", "/acl-docs/_explain/restricted-page", body);
-        assertThat(allowed.status()).isEqualTo(200);
-        assertThat(allowed.body().path("matched").asBoolean()).isTrue();
-
-        OpenSearchNode.Response hidden =
-                node.request("carol", PASSWORD, "POST", "/acl-docs/_explain/restricted-page", body);
-        assertThat(hidden.status()).isEqualTo(404);
-        assertThat(hidden.body().has("explanation")).isFalse();
+        for (String user : List.of("alice", "carol")) {
+            OpenSearchNode.Response response =
+                    node.request(user, PASSWORD, "POST", "/acl-docs/_explain/restricted-page", body);
+            assertThat(response.status()).as(user).isEqualTo(400);
+            assertThat(response.body().has("explanation")).isFalse();
+        }
+        OpenSearchNode.Response search = node.request("alice", PASSWORD, "POST", "/acl-docs/_search",
+                "{\"explain\":true,\"query\":{\"match\":{\"title\":\"budget\"}}}");
+        assertThat(search.status()).isEqualTo(400);
+        assertThat(search.body().toString()).doesNotContain("_explanation");
     }
 
     @Test
     void termVectorsHideDocumentsTheCallerCannotRead() throws Exception {
         OpenSearchNode.Response allowed = node.request("alice", PASSWORD, "POST",
-                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"]}");
+                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"],\"field_statistics\":false}");
         assertThat(allowed.status()).isEqualTo(200);
         assertThat(allowed.body().path("found").asBoolean()).isTrue();
 
         OpenSearchNode.Response hidden = node.request("carol", PASSWORD, "POST",
-                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"]}");
+                "/acl-docs/_termvectors/restricted-page", "{\"fields\":[\"title\"],\"field_statistics\":false}");
         assertThat(hidden.body().path("found").asBoolean()).isFalse();
         assertThat(hidden.body().has("term_vectors")).isFalse();
     }
 
     @Test
-    void termStatisticsAndArtificialDocumentsAreRejected() throws Exception {
+    void statisticsAndArtificialDocumentsAreRejected() throws Exception {
         assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_termvectors/space-page",
                 "{\"fields\":[\"title\"],\"term_statistics\":true}").status()).isEqualTo(400);
+        assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_termvectors/space-page",
+                "{\"fields\":[\"title\"]}").status()).isEqualTo(400);
         assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_termvectors",
-                "{\"doc\":{\"title\":\"budget\"}}").status()).isEqualTo(400);
+                "{\"doc\":{\"title\":\"budget\"},\"field_statistics\":false}").status()).isEqualTo(400);
         assertThat(node.request("alice", PASSWORD, "POST", "/acl-docs/_mtermvectors",
                 "{\"ids\":[\"space-page\"]}").status()).isEqualTo(400);
     }

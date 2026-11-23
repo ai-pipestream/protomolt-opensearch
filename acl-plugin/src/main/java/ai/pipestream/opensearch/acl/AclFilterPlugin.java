@@ -54,7 +54,7 @@ public class AclFilterPlugin extends Plugin implements ActionPlugin, SystemIndex
      */
     public AclFilterPlugin(Settings settings) {
         this.fields = AclSettings.fields(settings);
-        this.store = new PrincipalStore(client::get, () -> threadPool.get().getThreadContext());
+        this.store = new PrincipalStore(client::get, () -> threadPool.get().getThreadContext(), settings);
         this.principals = new CallerPrincipalResolver(() -> threadPool.get().getThreadContext(), store);
     }
 

@@ -26,3 +26,4 @@ jobs:
           path: |
             acl-plugin/build/distributions/*.zip
             acl-plugin/build/reports/tests/
+            acl-plugin/build/reports/acl-scale/

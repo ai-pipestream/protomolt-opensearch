@@ -1,6 +1,7 @@
 package ai.pipestream.opensearch.acl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -21,11 +22,14 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.bucket.global.GlobalAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.terms.SignificantTermsAggregationBuilder;
+import org.opensearch.search.aggregations.bucket.terms.SignificantTextAggregationBuilder;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 
 /**
- * Adds the ACL access query to every search that reaches an ACL protected index.
+ * Adds the ACL access query to every search that reaches an ACL protected index, and to the background filter of
+ * significant terms aggregations. Explain, suggest, global and significant text aggregations are refused.
  */
 public final class AclSearchFilter implements ActionFilter {
 
@@ -82,6 +86,9 @@ public final class AclSearchFilter implements ActionFilter {
                     ? AclQueries.access(fields, keys)
                     : AclQueries.accessForIndices(fields, keys, scope.protectedIndices());
             source.query(AclQueries.restrict(source.query(), access));
+            if (source.aggregations() != null) {
+                limitBackgrounds(source.aggregations().getAggregatorFactories(), access);
+            }
             searchRequest.source(source);
             chain.proceed(task, action, request, listener);
         }, listener::onFailure));
@@ -102,7 +109,19 @@ public final class AclSearchFilter implements ActionFilter {
         return protectedIndices.isEmpty() ? Scope.NONE : new Scope(protectedIndices);
     }
 
+    private static void limitBackgrounds(Collection<AggregationBuilder> aggregations, QueryBuilder access) {
+        for (AggregationBuilder aggregation : aggregations) {
+            if (aggregation instanceof SignificantTermsAggregationBuilder terms) {
+                terms.backgroundFilter(AclQueries.restrict(terms.backgroundFilter(), access));
+            }
+            limitBackgrounds(aggregation.getSubAggregations(), access);
+        }
+    }
+
     private static String unsupported(SearchSourceBuilder source) {
+        if (Boolean.TRUE.equals(source.explain())) {
+            return "explain is not supported on ACL protected indices";
+        }
         if (source.suggest() != null) {
             return "suggest is not supported on ACL protected indices";
         }
@@ -112,8 +131,21 @@ public final class AclSearchFilter implements ActionFilter {
                     return "global aggregations are not supported on ACL protected indices";
                 }
             }
+            if (containsSignificantText(source.aggregations().getAggregatorFactories())) {
+                return "significant text aggregations are not supported on ACL protected indices";
+            }
         }
         return null;
+    }
+
+    private static boolean containsSignificantText(Collection<AggregationBuilder> aggregations) {
+        for (AggregationBuilder aggregation : aggregations) {
+            if (aggregation instanceof SignificantTextAggregationBuilder
+                    || containsSignificantText(aggregation.getSubAggregations())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
